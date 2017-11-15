@@ -1,0 +1,18 @@
+# depslib dependency file v1.0
+1510767674 source:/home/mark/codeBlocks/SimpleHttpServer/main.cpp
+	<iostream>
+	<stdio.h>
+	<stdlib.h>
+	<unistd.h>
+	<errno.h>
+	<string.h>
+	<sys/types.h>
+	<sys/socket.h>
+	<netinet/in.h>
+	<netdb.h>
+	<arpa/inet.h>
+	<sys/wait.h>
+	<signal.h>
+	<vector>
+	<algorithm>
+
