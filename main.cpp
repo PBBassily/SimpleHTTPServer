@@ -13,15 +13,24 @@
 #include <signal.h>
 #include <vector>
 #include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <sys/stat.h>
+#include <sys/sendfile.h>
+#include <fcntl.h>
 
 
 #define PORT "3490"  // the port users will be connecting to
 
 #define BACKLOG 10	 // how many pending connections queue will hold
-#define MAXDATASIZE 1000 // max number of bytes we can get at once
+#define MAXDATASIZE 1000 // max number of bytes we can get or send at once
+#define FILE_NOT_FOUND_DESC -1 // file descriptor value when file is not found
+
 
 using namespace std;
 
+
+// basic finction
 void sigchld_handler(int s)
 {
     // waitpid() might overwrite errno, so we save and restore it:
@@ -44,6 +53,13 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+
+/***
+    @param file name/path
+    @return the string which defines the Content Type
+        of the HTTP reply
+
+**/
 string check_type(string path)
 {
 
@@ -64,6 +80,14 @@ string check_type(string path)
     return "text/plain";
 
 }
+
+/**
+
+    @param request buffer
+    @return vector of request strings split by space
+
+**/
+
 vector<string> get_first_line(char buffer[])
 {
     int length = strlen(buffer);
@@ -91,68 +115,83 @@ vector<string> get_first_line(char buffer[])
     return data;
 }
 
+/**
+    @param file descriptor
+    @return file size in bytes
+*/
 
-char* reply_wrapper(char *buffer,int size,string type)
+long get_file_size(int fd)
 {
+    struct stat stat_buf;
+    int rc = fstat(fd, &stat_buf);
+    return rc == 0 ? stat_buf.st_size : -1;
+}
 
+/**
+    @param file path
+    @return file descriptor
+*/
+int get_file_descriptor(string file_name)
+{
+    char *cstr = new char[file_name.length() + 1];
+    strcpy(cstr, file_name.c_str());
+    return open(cstr, O_RDONLY);
+}
+
+/**
+    @param file name of found file & size
+    @return the OK -200- HTTP reply
+*/
+
+char * file_found_reply(string path, long size)
+{
     string reply;
+    stringstream ss  ;
+    ss.str("");
+    ss<<"HTTP/1.1 200 OK\r\n";
 
-    reply = "HTTP/1.1 200 OK\r\n";
-    reply+="Content-Length: ";
-    reply+= size;
-    reply +="\r\nContent-Type: "+type+"\r\n";
-    reply+="\r\n";
-    reply+=buffer;
-    //reply+="\0";
+    ss<<"Content-Length: " ;
+
+    ss<<size;
+
+    ss<<"\r\nContent-Type: ";
+    ss<<check_type(path);
+    ss<<"\r\n";
+    ss<<"\r\n";
+
+    reply = ss.str();
+
     char *cstr = new char[reply.length() + 1];
     strcpy(cstr, reply.c_str());
     return cstr;
-
 }
 
-char* get_file(string name)
+/**
+    @param file name of not found file & size
+    @return the NOT FOUND -404- HTTP reply
+*/
+
+char * file_not_found_reply ()
 {
-    name.erase(0, 1);
+    char *reply;
+    reply = "HTTP/1.1 404 Not Found\r\n";
+    return reply;
 
-    if (FILE *fp = fopen(name.c_str(), "r+b"))
-    {
-
-        char *buffer = NULL;
-        size_t size = 0;
-
-        /* Open your_file in read-only mode */
-
-
-        /* Get the buffer size */
-        fseek(fp, 0, SEEK_END); /* Go to end of file */
-        size = ftell(fp); /* How many bytes did we pass ? */
-
-        /* Set position of stream to the beginning */
-        rewind(fp);
-
-        /* Allocate the buffer (no need to initialize it with calloc) */
-        buffer = (char*)malloc((size + 1) * sizeof(*buffer)); /* size + 1 byte for the \0 */
-
-        /* Read the file into the buffer */
-        fread(buffer, size, 1, fp); /* Read 1 chunk of size bytes from fp into buffer */
-
-        /* NULL-terminate the buffer */
-        buffer[size] = '\0';
-
-        printf("%s\n", buffer);
-        cout<<"size of buffer "<<size;
-        return reply_wrapper(buffer,size,check_type(name));
-
-    }
-    else
-    {
-        char *reply;
-        reply = "HTTP/1.1 404 Not Found\r\n";
-        return reply;
-
-    }
 }
 
+/**
+    @param file_found_boolean , file path , file size
+    @return proper HTTP reply
+*/
+
+char* get_header(bool file_is_found, string path, long size)
+{
+    if(file_is_found)
+        return file_found_reply(path,size);
+    else
+        return file_not_found_reply();
+
+}
 
 int main(void)
 {
@@ -165,6 +204,7 @@ int main(void)
     int yes=1;
     char s[INET6_ADDRSTRLEN];
     int rv;
+
 
     memset(&hints, 0, sizeof hints);
 
@@ -271,15 +311,56 @@ int main(void)
 
             string first_word = data[0];
 
+
+
             if((first_word.compare("GET")) == 0)
             {
                 cout<<"get"<<"\n";
 
-                char * reply = get_file(data[1]);
+                string file_name = data[1];
+                file_name.erase(0,1);
+                cout << "requested file : "<<file_name<<endl;
 
-                cout<<"\n"<<reply<<"\n";
-                if (send(new_fd, reply, strlen(reply), 0) == -1)
-                    perror("send");
+                int fd = get_file_descriptor (file_name);
+                cout << "file descriptor : "<<fd<<endl;
+                if(fd!=FILE_NOT_FOUND_DESC)
+                {
+                    // file is found
+
+                    long file_size = get_file_size(fd);
+                    cout << "file size : "<<file_size<<endl;
+
+                    char * reply_header = get_header(true,file_name,file_size);
+                    cout << "reply_header : \n"<<reply_header<<endl;
+
+                    if (send(new_fd, reply_header, strlen(reply_header), 0) == -1)
+                        perror("send");
+
+                    off_t offset = 0;
+                    int remain_data = file_size;
+                    size_t sent_bytes = 0;
+                    /* Sending file data */
+                    while (((sent_bytes = sendfile(new_fd, fd, &offset, MAXDATASIZE)) > 0) && (remain_data > 0))
+                    {
+                        remain_data -= sent_bytes;
+                        fprintf(stdout, " sent  = %d bytes, offset : %d, remaining data = %d\n",
+                                sent_bytes, offset, remain_data);
+                    }
+
+
+                }
+
+                else
+                {
+                    // file not found
+                    char * reply_header = get_header(false,file_name,0);
+                    cout << "reply_header : "<<reply_header<<endl;
+
+                    if (send(new_fd, reply_header, strlen(reply_header), 0) == -1)
+                        perror("send");
+                }
+
+
             }
             else if((first_word.compare("POST")) == 0)
             {
