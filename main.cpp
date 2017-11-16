@@ -275,70 +275,72 @@ int main(void)
         {
             close(sockfd); // child doesn't need the listener
 
-            int numbytes;
-            if ((numbytes = recv(new_fd, buf, MAXDATASIZE-1, 0)) == -1)
+            for(int i; i < 2; i++)
             {
-                perror("recv");
-                exit(1);
-            }
-            // print the get request
-            printf("server: numbytes '%d'\n",numbytes);
-            buf[numbytes] = '\0';
-
-            // print the request
-            cout<<"\n"<<buf;
-
-            vector<string> data = get_first_line(buf);
-
-            string first_word = data[0];
-
-            if((first_word.compare("GET")) == 0)
-            {
-                cout<<"get"<<"\n";
-
-                char * reply = get_file(data[1]);
-
-                cout<<"\n"<<reply<<"\n";
-                if (send(new_fd, reply, strlen(reply), 0) == -1)
-                    perror("send");
-            }
-            else if((first_word.compare("POST")) == 0)
-            {
-                cout<<"post"<<"\n";
-
-                char * reply = "OK\r\n";
-
-                // send OK to the client to start exchanging the data
-                if (send(new_fd, reply, strlen(reply), 0) == -1)
-                    perror("send");
-
-                // recv the data
                 int numbytes;
-
-                char buf_post[MAXDATASIZE];
-
-                if ((numbytes = recv(new_fd, buf_post, MAXDATASIZE-1, 0)) == -1)
+                if ((numbytes = recv(new_fd, buf, MAXDATASIZE-1, 0)) == -1)
                 {
                     perror("recv");
                     exit(1);
                 }
-                buf_post[numbytes] = '\0';
+                // print the get request
+                printf("server: numbytes '%d'\n",numbytes);
+                buf[numbytes] = '\0';
 
                 // print the request
-                cout<<"\n"<<buf_post;
+                cout<<"\n"<<buf;
 
-                //convert from char[] to string
-                string str(buf_post);
+                vector<string> data = get_first_line(buf);
 
-                // put the data into the file
-                post_file(data[1],str);
+                string first_word = data[0];
 
+                if((first_word.compare("GET")) == 0)
+                {
+                    cout<<"get"<<"\n";
+
+                    char * reply = get_file(data[1]);
+
+                    cout<<"\n"<<reply<<"\n";
+                    if (send(new_fd, reply, strlen(reply), 0) == -1)
+                        perror("send");
+                }
+                else if((first_word.compare("POST")) == 0)
+                {
+                    cout<<"post"<<"\n";
+
+                    char * reply = "OK";
+
+                    // send OK to the client to start exchanging the data
+                    if (send(new_fd, reply, strlen(reply), 0) == -1)
+                        perror("send");
+
+                    // recv the data
+                    int numbytes;
+
+                    char buf_post[MAXDATASIZE];
+
+                    if ((numbytes = recv(new_fd, buf_post, MAXDATASIZE-1, 0)) == -1)
+                    {
+                        perror("recv");
+                        exit(1);
+                    }
+                    buf_post[numbytes] = '\0';
+
+                    // print the request
+                    cout<<"post bufffer to get info : \n"<<buf_post;
+
+                    //convert from char[] to string
+                    string str(buf_post);
+
+                    // put the data into the file
+                    post_file(data[1],str);
+
+                }
+                else
+                {
+                    cout<<"ERROR no get or post found";
+                }
             }
-            else
-            {
-                cout<<"ERROR no get or post found";
-            }
-
             close(new_fd);
             exit(0);
         }
