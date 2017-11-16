@@ -364,7 +364,35 @@ int main(void)
             }
             else if((first_word.compare("POST")) == 0)
             {
-                cout<<"post";
+
+                    cout<<"post"<<"\n";
+
+                    char * reply = "OK";
+
+                    // send OK to the client to start exchanging the data
+                    if (send(new_fd, reply, strlen(reply), 0) == -1)
+                        perror("send");
+
+                    // recv the data
+                    int numbytes;
+
+                    char buf_post[MAXDATASIZE];
+
+                    while ((numbytes = recv(new_fd, buf_post, MAXDATASIZE-1, 0)) != -1)
+                    {
+
+
+                    }
+
+
+                    // print the request
+                    cout<<"post bufffer to get info : \n"<<buf_post;
+
+                    //convert from char[] to string
+                    string str(buf_post);
+
+                    // put the data into the file
+                    post_file(data[1],str);
             }
             else
             {
