@@ -13,7 +13,7 @@
 #include <signal.h>
 #include <vector>
 #include <algorithm>
-
+#include <fstream>
 
 #define PORT "3490"  // the port users will be connecting to
 
@@ -153,7 +153,25 @@ char* get_file(string name)
     }
 }
 
+/**
+    this function to put the data into the file in post request
+    @param name the name of the file
+    @param data the data that will written to the file
 
+*/
+void post_file(string name, string data)
+{
+
+    name.erase(0, 1);
+
+    ofstream myfile;
+    myfile.open (name.c_str());
+    myfile << data;
+    myfile.close();
+}
+/**
+this the main function
+*/
 int main(void)
 {
     char buf[MAXDATASIZE];
@@ -267,6 +285,9 @@ int main(void)
             printf("server: numbytes '%d'\n",numbytes);
             buf[numbytes] = '\0';
 
+            // print the request
+            cout<<"\n"<<buf;
+
             vector<string> data = get_first_line(buf);
 
             string first_word = data[0];
@@ -283,7 +304,35 @@ int main(void)
             }
             else if((first_word.compare("POST")) == 0)
             {
-                cout<<"post";
+                cout<<"post"<<"\n";
+
+                char * reply = "OK\r\n";
+
+                // send OK to the client to start exchanging the data
+                if (send(new_fd, reply, strlen(reply), 0) == -1)
+                    perror("send");
+
+                // recv the data
+                int numbytes;
+
+                char buf_post[MAXDATASIZE];
+
+                if ((numbytes = recv(new_fd, buf_post, MAXDATASIZE-1, 0)) == -1)
+                {
+                    perror("recv");
+                    exit(1);
+                }
+                buf_post[numbytes] = '\0';
+
+                // print the request
+                cout<<"\n"<<buf_post;
+
+                //convert from char[] to string
+                string str(buf_post);
+
+                // put the data into the file
+                post_file(data[1],str);
+
             }
             else
             {
