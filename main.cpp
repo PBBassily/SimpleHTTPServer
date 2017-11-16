@@ -365,34 +365,43 @@ int main(void)
             else if((first_word.compare("POST")) == 0)
             {
 
-                    cout<<"post"<<"\n";
+                cout<<"post"<<"\n";
 
-                    char * reply = "OK";
+                char * reply = "OK";
 
-                    // send OK to the client to start exchanging the data
-                    if (send(new_fd, reply, strlen(reply), 0) == -1)
-                        perror("send");
+                // send OK to the client to start exchanging the data
+                if (send(new_fd, reply, strlen(reply), 0) == -1)
+                    perror("send");
 
-                    // recv the data
-                    int numbytes;
+                // recv the data
+                int numbytes;
 
-                    char buf_post[MAXDATASIZE];
+                char buf_post[MAXDATASIZE];
+                //////////////////
+                FILE * recieved_file ;
+                string path = data[1];
+                path.erase(0,1);
+                char *file_name = new char[path.length() + 1];
+                strcpy(file_name, path.c_str());
 
-                    while ((numbytes = recv(new_fd, buf_post, MAXDATASIZE-1, 0)) != -1)
-                    {
+                recieved_file = fopen(file_name, "w");
+
+                if (recieved_file == NULL)
+                {
+                    fprintf(stderr, "Failed to open file foo --> %s\n", strerror(errno));
+
+                    exit(EXIT_FAILURE);
+                }
 
 
-                    }
+                while ((numbytes = recv(new_fd, buf_post, MAXDATASIZE, 0)) > 0)
+                {
+                    fwrite(buf_post, sizeof(char), numbytes, recieved_file);
+                    //remain_data -= len;
+                    fprintf(stdout, "Receive %d bytes\n", numbytes);
+                }
+                fclose(recieved_file);
 
-
-                    // print the request
-                    cout<<"post bufffer to get info : \n"<<buf_post;
-
-                    //convert from char[] to string
-                    string str(buf_post);
-
-                    // put the data into the file
-                    post_file(data[1],str);
             }
             else
             {
