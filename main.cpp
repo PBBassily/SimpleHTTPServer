@@ -320,7 +320,7 @@ int main(void)
 
             time_t response_time = time(NULL);
 
-            while(is_time_out(response_time))
+            for(int i = 0 ; i < 5 ; i++)
             {
 
                 cout<<"66666666666666666666666666\n";
