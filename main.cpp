@@ -19,10 +19,14 @@
 #include <sys/sendfile.h>
 #include <fcntl.h>
 
-#define PORT "8080"  // the port users will be connecting to
+
+#define PORT "3490"  // the port users will be connecting to
+
 #define BACKLOG 10	 // how many pending connections queue will hold
-#define MAXDATASIZE 1000 // max number of bytes we can get or send at once
+
+#define MAXDATASIZE 4096 // max number of bytes we can get or send at once
 #define FILE_NOT_FOUND_DESC -1 // file descriptor value when file is not found
+
 
 using namespace std;
 
@@ -30,6 +34,7 @@ using namespace std;
 // basic finction
 void sigchld_handler(int s)
 {
+    // waitpid() might overwrite errno, so we save and restore it:
     int saved_errno = errno;
 
     while(waitpid(-1, NULL, WNOHANG) > 0);
@@ -98,6 +103,7 @@ vector<string> get_first_line(char buffer[])
 
         if(buffer[i] == ' ')
         {
+            //  line+='\0';
             data.push_back(line);
             line = "";
         }
@@ -137,46 +143,6 @@ int get_file_descriptor(string file_name)
     @param file name of found file & size
     @return the OK -200- HTTP reply
 */
-
-int get_file_size_from_header(char buffer[])
-{
-    int length = strlen(buffer);
-    int file_size=0;
-    string line = "";
-
-    for(int i = 0 ; i < length ; i++)
-    {
-        if(buffer[i] == ' ' || buffer[i] == '\r' || buffer[i] == '\n')
-        {
-
-            if( (line.compare("Content-Length:")) == 0)
-            {
-                line = "";
-                i++;
-
-                while(buffer[i] != '\r')
-                {
-                    line+= buffer[i];
-                    i++;
-                }
-
-                file_size = stoi(line);
-
-                return file_size;
-            }
-
-            line = "";
-        }
-        else
-        {
-            line+=buffer[i];
-        }
-
-    }
-
-    return -1;
-
-}
 
 char * file_found_reply(string path, long size)
 {
@@ -227,6 +193,47 @@ char* get_header(bool file_is_found, string path, long size)
         return file_not_found_reply();
 
 }
+
+int get_file_size_from_header(char buffer[])
+{
+    int length = strlen(buffer);
+    int file_size=0;
+    string line = "";
+
+    for(int i = 0 ; i < length ; i++)
+    {
+        if(buffer[i] == ' ' || buffer[i] == '\r' || buffer[i] == '\n')
+        {
+
+            if( (line.compare("Content-Length:")) == 0)
+            {
+                line = "";
+                i++;
+
+                while(buffer[i] != '\r')
+                {
+                    line+= buffer[i];
+                    i++;
+                }
+
+                file_size = stoi(line);
+
+                return file_size;
+            }
+
+            line = "";
+        }
+        else
+        {
+            line+=buffer[i];
+        }
+
+    }
+
+    return -1;
+
+}
+
 
 int main(void)
 {
@@ -332,7 +339,7 @@ int main(void)
         {
             close(sockfd); // child doesn't need the listener
             int i = 0;
-            while(i < 6)
+            while(i < 8)
             {
                 cout << i << "------\n";
                 int numbytes;
@@ -348,7 +355,6 @@ int main(void)
                 vector<string> data = get_first_line(buf);
 
                 string first_word = data[0];
-
 
 
                 if((first_word.compare("GET")) == 0)
@@ -392,6 +398,7 @@ int main(void)
                         }
  //                       sent_bytes = sendfile(new_fd, fd, &offset, MAXDATASIZE);
                         cout<< "Finish Sending data\n\n";
+                        //close(fd);
 
                     }
 
@@ -410,8 +417,10 @@ int main(void)
                 else if((first_word.compare("POST")) == 0)
                 {
 
-                    cout<<"post"<<"\n";
+
                     int file_size = get_file_size_from_header(buf);
+                    cout << buf<< endl;
+                    cout<<"post file sizeeeeeeeeeeeeeeeeeeeeeeeeeeeee "<< file_size<<"\n";
 
                     char * reply = "OK";
 
@@ -439,24 +448,60 @@ int main(void)
                         exit(EXIT_FAILURE);
                     }
 
-                    int remain_data= file_size;
-                    while ((remain_data>0)&&((numbytes = recv(new_fd, buf_post, MAXDATASIZE, 0)) > 0))
+                    int remain_data = file_size;
+
+                    while (remain_data > 0 &&(numbytes = recv(new_fd, buf_post, MAXDATASIZE, 0)) > 0)
                     {
-
-
                         fwrite(buf_post, sizeof(char), numbytes, recieved_file);
                         remain_data -= numbytes;
-                        fprintf(stdout, "Receive %d bytes : remain: %d\n", numbytes,remain_data);
-                        if(remain_data<MAXDATASIZE){
+                        fprintf(stdout, "Receive %d bytes\n", numbytes);
 
-                            recv(new_fd, buf_post, remain_data, 0);
-                        }
-
-
-
+                        fprintf(stdout, "remain %d bytes\n", remain_data);
+                       // if(remain_data < MAXDATASIZE){
+                        //    recv(new_fd, buf_post, remain_data, 0);
+                        //}
                     }
 
+               /* timeval timeout = { 5, 0 };
+                fd_set in_set;
+
+                while ( remain_data > 0)
+                {
+
+
+                    FD_ZERO(&in_set);
+                    FD_SET(sockfd, &in_set);
+
+                    // select the set
+                    int cnt = select(sockfd + 1, &in_set, NULL, NULL, &timeout);
+
+                    /////////////////////////////////////////////////////////////////////////
+                    if (FD_ISSET(sockfd, &in_set))
+                    {
+                        numbytes = recv(sockfd, buf, MAXDATASIZE, 0);
+                        if (numbytes <= 0)
+                        {
+                            // nothing received from client
+                            cout<< "nothing received from client \n";
+                            break;
+                        }
+                        fwrite(buf, sizeof(char), numbytes, recieved_file);
+                        remain_data -= numbytes;
+                        fprintf(stdout, "Remain %d bytes\n", remain_data);
+
+                    }
+                    else
+                    {
+                        // nothing received from client in last 5 seconds
+                        cout << "nothing received from client in last 3 seconds\n";
+                        break;
+                    }
+
+                }*/
+
+
                     fclose(recieved_file);
+                    usleep(1000000);
 
                 }
                 else
@@ -464,7 +509,7 @@ int main(void)
                     cout<<"ERROR no get or post found";
                 }
                 i++;
-                usleep(1000);
+                usleep(1000000);
 
             }
             close(new_fd);
@@ -476,5 +521,3 @@ int main(void)
 
     return 0;
 }
-//\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-
