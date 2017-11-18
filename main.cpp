@@ -19,7 +19,11 @@
 #include <sys/sendfile.h>
 #include <fcntl.h>
 #include <time.h>
-
+#include <mutex>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #define PORT "8080"  // default port if not specified by server arguments
 
 #define BACKLOG 10	 // how many pending connections queue will hold
@@ -31,9 +35,8 @@
 
 
 using namespace std;
-
-int client_num = 0;
-
+mutex mtx;
+static int *client_num_pointer;
 
 // basic finction
 void sigchld_handler(int s)
@@ -355,161 +358,198 @@ int establish_conncetion (char* port_number)
                   get_in_addr((struct sockaddr *)&their_addr),
                   s, sizeof s);
 
-        cout<<"server: got connection client"<<++client_num<<" address is "<<s<<endl;
+                            mtx.lock();
+                            ++(*client_num_pointer);
+                            mtx.unlock();
+        cout<<"server: got connection client"<<(*client_num_pointer)<<" address is "<<s<<endl;
 
         if (!fork())   // this is the child process
         {
+            //client_num++;
             close(sockfd); // child doesn't need the listener
             int connection_number =0;
 
             time_t start =  time(NULL);
 
-            while(time_out(start))
+            while (1)
             {
-                cout <<"server : connection number : "<<connection_number<<endl;
+                timeval timeout = { 3/(*client_num_pointer), 0 };
+                fd_set in_set;
 
-                // listen for a request
-                int numbytes;
-                if ((numbytes = recv(new_fd, buf, MAXDATASIZE-1, 0)) == -1)
+                FD_ZERO(&in_set);
+                FD_SET(new_fd, &in_set);
+
+                // select the set
+                int cnt = select(new_fd + 1, &in_set, NULL, NULL, &timeout);
+
+                cout << "cnt: "<<cnt<<endl;
+                if (FD_ISSET(new_fd, &in_set))
                 {
-                    perror("recv");
-                    exit(1);
-                }
-                // add null to the request
-                buf[numbytes] = '\0';
+                    cout <<"server : connection number : "<<connection_number<<endl;
 
-                // parse the request
-                vector<string> data = get_first_line(buf);
-
-                // get request type
-                string first_word = data[0];
-
-                cout << "client"<<client_num<<" : "<<data[0]<<data[1]<<endl;
-
-                if((first_word.compare("GET")) == 0)
-                {
-                    start =  time(NULL);
-
-
-                    string file_name = data[1];
-                    file_name.erase(0,1);
-
-
-                    int fd = get_file_descriptor (file_name);
-
-                    if(fd!=FILE_NOT_FOUND_DESC)
-                    {
-                        // file is found
-
-                        long file_size = get_file_size(fd);
-
-
-                        char * reply_header = get_header(true,file_name,file_size);
-                        cout << "server  : GET header sent ... \n"<<reply_header;
-
-                        if (send(new_fd, reply_header, strlen(reply_header), 0) == -1)
-                            perror("send");
-
-                        off_t offset = 0;
-                        int remain_data = file_size;
-                        size_t sent_bytes = 0;
-
-                        /* Sending file data */
-
-                        while (((sent_bytes = sendfile(new_fd, fd, &offset, MAXDATASIZE)) > 0) && (remain_data > 0))
-                        {
-                            remain_data -= sent_bytes;
-                            usleep(INTER_PACKET_INTERVAL);
-                            start =  time(NULL);
-//                            fprintf(stdout, " sent  = %d bytes, offset : %d, remaining data = %d\n",
-//                                    sent_bytes, offset, remain_data);
-                        }
-//
-                        cout<< "server : sent data\n\n";
-
-
-                    }
-
-                    else
-                    {
-                        // file not found
-                        char * reply_header = get_header(false,file_name,0);
-                        cout << "server  : GET header sent ... \n"<<reply_header;
-
-                        if (send(new_fd, reply_header, strlen(reply_header), 0) == -1)
-                            perror("send");
-                    }
-
-                    // close the file descriptor
-                    close(fd);
-
-
-                }
-                else if((first_word.compare("POST")) == 0)
-                {
-                    start =  time(NULL);
-
-                    int file_size = get_file_size_from_header(buf);
-
-
-
-                    char * reply = "OK";
-
-                    // send OK to the client to start exchanging the data
-                    if (send(new_fd, reply, strlen(reply), 0) == -1)
-                        perror("send");
-
-                    cout << "server : OK"<<endl;
-
-                    // recv the data
+                    // listen for a request
                     int numbytes;
-
-                    char buf_post[MAXDATASIZE];
-                    FILE * recieved_file ;
-                    string path = data[1];
-                    path.erase(0,1);
-                    char *file_name = new char[path.length() + 1];
-                    strcpy(file_name, path.c_str());
-
-                    recieved_file = fopen(file_name, "w");
-
-                    if (recieved_file == NULL)
+                    if ((numbytes = recv(new_fd, buf, MAXDATASIZE-1, 0)) == -1)
                     {
-                        fprintf(stderr, "Failed to open file foo --> %s\n", strerror(errno));
-
-                        exit(EXIT_FAILURE);
+                        perror("recv");
+                        exit(1);
                     }
 
-                    int remain_data = file_size;
+                    // add null to the request
+                    buf[numbytes] = '\0';
 
-                    while (remain_data > 0 &&(numbytes = recv(new_fd, buf_post, MAXDATASIZE, 0)) > 0)
+
+                    // parse the request
+                    vector<string> data = get_first_line(buf);
+
+                    // get request type
+                    string first_word = data[0];
+
+                    cout << "client "<<(*client_num_pointer)<<" : "<<data[0]<<data[1]<<endl;
+
+                    if((first_word.compare("GET")) == 0)
                     {
-                        fwrite(buf_post, sizeof(char), numbytes, recieved_file);
-                        remain_data -= numbytes;
-//                        fprintf(stdout, "Receive %d bytes\n", numbytes);
-//                        fprintf(stdout, "remain %d bytes\n", remain_data);
                         start =  time(NULL);
 
+
+                        string file_name = data[1];
+                        file_name.erase(0,1);
+
+
+                        int fd = get_file_descriptor (file_name);
+
+                        if(fd!=FILE_NOT_FOUND_DESC)
+                        {
+                            // file is found
+
+                            long file_size = get_file_size(fd);
+
+
+                            char * reply_header = get_header(true,file_name,file_size);
+                            cout << "server  : GET header sent ... \n"<<reply_header;
+
+                            if (send(new_fd, reply_header, strlen(reply_header), 0) == -1)
+                                perror("send");
+
+                            off_t offset = 0;
+                            int remain_data = file_size;
+                            size_t sent_bytes = 0;
+
+                            /* Sending file data */
+
+                            while (((sent_bytes = sendfile(new_fd, fd, &offset, MAXDATASIZE)) > 0) && (remain_data > 0))
+                            {
+                                remain_data -= sent_bytes;
+                                usleep(INTER_PACKET_INTERVAL);
+                                start =  time(NULL);
+//                            fprintf(stdout, " sent  = %d bytes, offset : %d, remaining data = %d\n",
+//                                    sent_bytes, offset, remain_data);
+                            }
+//
+                            cout<< "server : sent data\n\n";
+
+
+                        }
+
+                        else
+                        {
+                            // file not found
+                            char * reply_header = get_header(false,file_name,0);
+                            cout << "server  : GET header sent ... \n"<<reply_header;
+
+                            if (send(new_fd, reply_header, strlen(reply_header), 0) == -1)
+                                perror("send");
+                        }
+
+                        // close the file descriptor
+                        close(fd);
+
+
                     }
+                    else if((first_word.compare("POST")) == 0)
+                    {
+                        start =  time(NULL);
 
-                    cout << "server  : file received "<<endl;
+                        int file_size = get_file_size_from_header(buf);
 
-                    fclose(recieved_file);
+
+
+                        char * reply = "OK";
+
+                        // send OK to the client to start exchanging the data
+                        if (send(new_fd, reply, strlen(reply), 0) == -1)
+                            perror("send");
+
+                        cout << "server : OK"<<endl;
+
+                        // recv the data
+                        int numbytes;
+
+                        char buf_post[MAXDATASIZE];
+                        FILE * recieved_file ;
+                        string path = data[1];
+                        path.erase(0,1);
+                        char *file_name = new char[path.length() + 1];
+                        strcpy(file_name, path.c_str());
+
+                        recieved_file = fopen(file_name, "w");
+
+                        if (recieved_file == NULL)
+                        {
+                            fprintf(stderr, "Failed to open file foo --> %s\n", strerror(errno));
+
+                            exit(EXIT_FAILURE);
+                        }
+
+                        int remain_data = file_size;
+
+                        while (remain_data > 0 &&(numbytes = recv(new_fd, buf_post, MAXDATASIZE, 0)) > 0)
+                        {
+                            fwrite(buf_post, sizeof(char), numbytes, recieved_file);
+                            remain_data -= numbytes;
+//                        fprintf(stdout, "Receive %d bytes\n", numbytes);
+//                        fprintf(stdout, "remain %d bytes\n", remain_data);
+                            start =  time(NULL);
+
+                        }
+
+                        cout << "server  : file received "<<endl;
+
+                        fclose(recieved_file);
+                        usleep(INTER_COMMAND_INTERVAL);
+
+                    }
+                    else if((first_word.compare("finish")) == 0){
+                            mtx.lock();
+                            --(*client_num_pointer);
+                            mtx.unlock();
+                            cout<<"client num : "<<(*client_num_pointer)<<endl;
+                        cout<< " client finish his work and close\n";
+                    }
+                    else
+                    {
+                        cout<<"server : invalid request"<<endl;
+                    }
+                    connection_number++;
                     usleep(INTER_COMMAND_INTERVAL);
 
+
                 }
+
                 else
                 {
-                    cout<<"server : invalid request"<<endl;
+                    // nothing received from client in last 5 seconds
+                    cout << "nothing received from client in last 3 seconds\n";
+                    break;
                 }
-                connection_number++;
-                usleep(INTER_COMMAND_INTERVAL);
 
             }
+
+            cout<< "connection closed \n";
             close(new_fd);
             exit(0);
         }
-
+         cout<< "connection closed \n";
         close(new_fd);  // parent doesn't need this
     }
 
@@ -528,8 +568,13 @@ char * get_port_number(int argc, char* argv [])
 
 int main(int argc, char *argv[])
 {
+    client_num_pointer = (int*)mmap(NULL, sizeof *client_num_pointer, PROT_READ | PROT_WRITE,
+                    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+
+    *client_num_pointer = 0;
     char * port_number = get_port_number(argc,argv);
     int status = establish_conncetion(port_number);
 
     return status;
 }
+
