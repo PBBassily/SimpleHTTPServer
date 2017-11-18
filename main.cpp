@@ -18,7 +18,7 @@
 #include <sys/stat.h>
 #include <sys/sendfile.h>
 #include <fcntl.h>
-
+#include <time.h>
 
 #define PORT "3490"  // the port users will be connecting to
 
@@ -234,6 +234,22 @@ int get_file_size_from_header(char buffer[])
 
 }
 
+/**
+    this is time out function close the connection after certain time
+    @param start start time of last connection
+*/
+bool time_out(time_t start){
+
+    time_t end = time(NULL);
+
+    double duration  = (double)(end-start);
+    std::cout<<"Execution Time: "<< duration<<" Seconds"<<std::endl;
+
+    if(duration < 3.0)
+        return true;
+    else
+        return false;
+}
 
 int main(void)
 {
@@ -339,7 +355,10 @@ int main(void)
         {
             close(sockfd); // child doesn't need the listener
             int i = 0;
-            while(i < 8)
+
+            time_t start =  time(NULL);
+
+            while(time_out(start))
             {
                 cout << i << "------\n";
                 int numbytes;
@@ -359,6 +378,7 @@ int main(void)
 
                 if((first_word.compare("GET")) == 0)
                 {
+                    start =  time(NULL);
                     // cout<<"get"<<"\n";
 
                     string file_name = data[1];
@@ -391,8 +411,9 @@ int main(void)
                             if( 1 || remain_data <= 2000 ){
                                 cout<< "delayyyyyyyyyyyyyyyyyy\n";
                                 usleep(500);
-                            }
 
+                            }
+                            start =  time(NULL);
                             fprintf(stdout, " sent  = %d bytes, offset : %d, remaining data = %d\n",
                                  sent_bytes, offset, remain_data);
                         }
@@ -416,7 +437,7 @@ int main(void)
                 }
                 else if((first_word.compare("POST")) == 0)
                 {
-
+                    start =  time(NULL);
 
                     int file_size = get_file_size_from_header(buf);
                     cout << buf<< endl;
@@ -457,6 +478,7 @@ int main(void)
                         fprintf(stdout, "Receive %d bytes\n", numbytes);
 
                         fprintf(stdout, "remain %d bytes\n", remain_data);
+                        start =  time(NULL);
                        // if(remain_data < MAXDATASIZE){
                         //    recv(new_fd, buf_post, remain_data, 0);
                         //}
