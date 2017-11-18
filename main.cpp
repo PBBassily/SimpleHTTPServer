@@ -177,7 +177,7 @@ char * file_found_reply(string path, long size)
 char * file_not_found_reply ()
 {
     char *reply;
-    reply = "HTTP/1.1 404 Not Found\r\n";
+    reply = "HTTP/1.1 404 Not Found\r\nContent-Length: 0 \r\n\r\n";
     return reply;
 
 }
@@ -240,7 +240,8 @@ int get_file_size_from_header(char buffer[])
     this is time out function close the connection after certain time
     @param start start time of last connection
 */
-bool time_out(time_t start){
+bool time_out(time_t start)
+{
 
     time_t end = time(NULL);
 
@@ -253,7 +254,8 @@ bool time_out(time_t start){
         return false;
 }
 
-int establish_conncetion (char* port_number) {
+int establish_conncetion (char* port_number)
+{
 
     char buf[MAXDATASIZE];
     int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
@@ -414,19 +416,14 @@ int establish_conncetion (char* port_number) {
                         while (((sent_bytes = sendfile(new_fd, fd, &offset, MAXDATASIZE)) > 0) && (remain_data > 0))
                         {
                             remain_data -= sent_bytes;
-
-                            if( 1 || remain_data <= 2000 ){
-
-                                usleep(INTER_PACKET_INTERVAL);
-
-                            }
+                            usleep(INTER_PACKET_INTERVAL);
                             start =  time(NULL);
-                            fprintf(stdout, " sent  = %d bytes, offset : %d, remaining data = %d\n",
-                                 sent_bytes, offset, remain_data);
+//                            fprintf(stdout, " sent  = %d bytes, offset : %d, remaining data = %d\n",
+//                                    sent_bytes, offset, remain_data);
                         }
- //                       sent_bytes = sendfile(new_fd, fd, &offset, MAXDATASIZE);
-                        cout<< "Finish Sending data\n\n";
-                        //close(fd);
+//
+                        cout<< "server : sent data\n\n";
+
 
                     }
 
@@ -513,9 +510,11 @@ int establish_conncetion (char* port_number) {
     return 0;
 
 }
-char * get_port_number(int argc , char* argv []){
+char * get_port_number(int argc, char* argv [])
+{
     char* port_number = PORT ;
-    if (argc > 1){
+    if (argc > 1)
+    {
         port_number = argv[1];
     }
     return port_number ;
