@@ -32,6 +32,8 @@
 
 using namespace std;
 
+int client_num = 0;
+
 
 // basic finction
 void sigchld_handler(int s)
@@ -353,7 +355,7 @@ int establish_conncetion (char* port_number)
                   get_in_addr((struct sockaddr *)&their_addr),
                   s, sizeof s);
 
-        printf("server: got connection from %s\n", s);
+        cout<<"server: got connection client"<<++client_num<<" address is "<<s<<endl;
 
         if (!fork())   // this is the child process
         {
@@ -382,6 +384,7 @@ int establish_conncetion (char* port_number)
                 // get request type
                 string first_word = data[0];
 
+                cout << "client"<<client_num<<" : "<<data[0]<<data[1]<<endl;
 
                 if((first_word.compare("GET")) == 0)
                 {
@@ -402,7 +405,7 @@ int establish_conncetion (char* port_number)
 
 
                         char * reply_header = get_header(true,file_name,file_size);
-                        cout << "reply_header : \n"<<reply_header<<endl;
+                        cout << "server  : GET header sent ... \n"<<reply_header;
 
                         if (send(new_fd, reply_header, strlen(reply_header), 0) == -1)
                             perror("send");
@@ -431,7 +434,7 @@ int establish_conncetion (char* port_number)
                     {
                         // file not found
                         char * reply_header = get_header(false,file_name,0);
-                        cout << "reply_header : file not found\n"<<reply_header<<endl;
+                        cout << "server  : GET header sent ... \n"<<reply_header;
 
                         if (send(new_fd, reply_header, strlen(reply_header), 0) == -1)
                             perror("send");
@@ -456,11 +459,12 @@ int establish_conncetion (char* port_number)
                     if (send(new_fd, reply, strlen(reply), 0) == -1)
                         perror("send");
 
+                    cout << "server : OK"<<endl;
+
                     // recv the data
                     int numbytes;
 
                     char buf_post[MAXDATASIZE];
-                    //////////////////
                     FILE * recieved_file ;
                     string path = data[1];
                     path.erase(0,1);
@@ -482,19 +486,21 @@ int establish_conncetion (char* port_number)
                     {
                         fwrite(buf_post, sizeof(char), numbytes, recieved_file);
                         remain_data -= numbytes;
-                        fprintf(stdout, "Receive %d bytes\n", numbytes);
-
-                        fprintf(stdout, "remain %d bytes\n", remain_data);
+//                        fprintf(stdout, "Receive %d bytes\n", numbytes);
+//                        fprintf(stdout, "remain %d bytes\n", remain_data);
                         start =  time(NULL);
 
                     }
+
+                    cout << "server  : file received "<<endl;
+
                     fclose(recieved_file);
                     usleep(INTER_COMMAND_INTERVAL);
 
                 }
                 else
                 {
-                    cout<<"ERROR no get or post found"<<endl;
+                    cout<<"server : invalid request"<<endl;
                 }
                 connection_number++;
                 usleep(INTER_COMMAND_INTERVAL);
