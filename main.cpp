@@ -245,18 +245,14 @@ int get_file_size_from_header(char buffer[])
     this is time out function close the connection after certain time
     @param start start time of last connection
 */
-bool time_out(time_t start)
+double timer(time_t start)
 {
 
     time_t end = time(NULL);
 
     double duration  = (double)(end-start);
     std::cout<<"Execution Time: "<< duration<<" Seconds"<<std::endl;
-
-    if(duration < 3.0)
-        return true;
-    else
-        return false;
+    return duration;
 }
 
 int establish_conncetion (char* port_number)
@@ -358,9 +354,12 @@ int establish_conncetion (char* port_number)
                   get_in_addr((struct sockaddr *)&their_addr),
                   s, sizeof s);
 
-                            mtx.lock();
-                            ++(*client_num_pointer);
-                            mtx.unlock();
+        mtx.lock();
+        ++(*client_num_pointer);
+        mtx.unlock();
+
+        time_t start = time(NULL);
+
         cout<<"server: got connection client"<<(*client_num_pointer)<<" address is "<<s<<endl;
 
         if (!fork())   // this is the child process
@@ -369,11 +368,11 @@ int establish_conncetion (char* port_number)
             close(sockfd); // child doesn't need the listener
             int connection_number =0;
 
-            time_t start =  time(NULL);
+           // time_t start =  time(NULL);
 
             while (1)
             {
-                timeval timeout = { 3/(*client_num_pointer), 0 };
+                timeval timeout = { 10/(*client_num_pointer), 0 };
                 fd_set in_set;
 
                 FD_ZERO(&in_set);
@@ -409,9 +408,9 @@ int establish_conncetion (char* port_number)
 
                     if((first_word.compare("GET")) == 0)
                     {
-                        start =  time(NULL);
+                      //  start =  time(NULL);
 
-
+                        timeout = { 10/(*client_num_pointer), 0 };
                         string file_name = data[1];
                         file_name.erase(0,1);
 
@@ -442,7 +441,8 @@ int establish_conncetion (char* port_number)
                             {
                                 remain_data -= sent_bytes;
                                 usleep(INTER_PACKET_INTERVAL);
-                                start =  time(NULL);
+                                timeout = { 10/(*client_num_pointer), 0 };
+                               // start =  time(NULL);
 //                            fprintf(stdout, " sent  = %d bytes, offset : %d, remaining data = %d\n",
 //                                    sent_bytes, offset, remain_data);
                             }
@@ -469,8 +469,8 @@ int establish_conncetion (char* port_number)
                     }
                     else if((first_word.compare("POST")) == 0)
                     {
-                        start =  time(NULL);
-
+                      //  start =  time(NULL);
+                        timeout = { 10/(*client_num_pointer), 0 };
                         int file_size = get_file_size_from_header(buf);
 
 
@@ -510,7 +510,8 @@ int establish_conncetion (char* port_number)
                             remain_data -= numbytes;
 //                        fprintf(stdout, "Receive %d bytes\n", numbytes);
 //                        fprintf(stdout, "remain %d bytes\n", remain_data);
-                            start =  time(NULL);
+                            //start =  time(NULL);
+                            timeout = { 10/(*client_num_pointer), 0 };
 
                         }
 
@@ -520,11 +521,13 @@ int establish_conncetion (char* port_number)
                         usleep(INTER_COMMAND_INTERVAL);
 
                     }
-                    else if((first_word.compare("finish")) == 0){
-                            mtx.lock();
-                            --(*client_num_pointer);
-                            mtx.unlock();
-                            cout<<"===>client num : "<<(*client_num_pointer)<<endl;
+                    else if((first_word.compare("finish")) == 0)
+                    {
+                        mtx.lock();
+                        --(*client_num_pointer);
+                        mtx.unlock();
+                        cout<<"duration : "<<timer(start)<<endl;
+                        cout<<"===>client num : "<<(*client_num_pointer)<<endl;
                         cout<< " client finish his work and close\n";
                     }
                     else
@@ -540,10 +543,12 @@ int establish_conncetion (char* port_number)
                 else
                 {
                     // nothing received from client in last 5 seconds
-                     mtx.lock();
-                            --(*client_num_pointer);
-                            mtx.unlock();
-                            cout<<"===>client num : "<<(*client_num_pointer)<<endl;
+                    mtx.lock();
+                    --(*client_num_pointer);
+                    mtx.unlock();
+
+                    cout<<"duration : "<<timer(start)<<endl;
+                    cout<<"===>client num : "<<(*client_num_pointer)<<endl;
                     cout << "nothing received from client in last 3 seconds\n";
                     break;
                 }
@@ -554,7 +559,7 @@ int establish_conncetion (char* port_number)
             close(new_fd);
             exit(0);
         }
-         cout<< "connection closed \n";
+        cout<< "connection closed \n";
         close(new_fd);  // parent doesn't need this
     }
 
@@ -574,7 +579,7 @@ char * get_port_number(int argc, char* argv [])
 int main(int argc, char *argv[])
 {
     client_num_pointer = (int*)mmap(NULL, sizeof *client_num_pointer, PROT_READ | PROT_WRITE,
-                    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+                                    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
     *client_num_pointer = 0;
     char * port_number = get_port_number(argc,argv);
