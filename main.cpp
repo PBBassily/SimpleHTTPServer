@@ -32,6 +32,7 @@
 #define INTER_COMMAND_INTERVAL 1000000 // 1 sec
 #define INTER_PACKET_INTERVAL 500 // 500 microsecond
 #define FILE_NOT_FOUND_DESC -1 // file descriptor value when file is not found
+#define DELAY 10 // inter processes delay
 
 
 using namespace std;
@@ -372,7 +373,7 @@ int establish_conncetion (char* port_number)
 
             while (1)
             {
-                timeval timeout = { 10/(*client_num_pointer), 0 };
+                timeval timeout = { DELAY/(*client_num_pointer), 0 };
                 fd_set in_set;
 
                 FD_ZERO(&in_set);
