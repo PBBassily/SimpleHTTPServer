@@ -13,9 +13,9 @@ simple http server that handles small set of  HTTP 1.1 methods
 Note : that the port number the server attached to is given to the server as an input , 
 if no arguments passed the defualt port will be 8080
 
-##Test 
+## Test 
 
--open {YOUR-PROJ-PATH}/SimpleHTTPServer/bin/debug
+- open {YOUR-PROJ-PATH}/SimpleHTTPServer/bin/debug
 - add a simple HTML file ex : index.html
 - open your broswer 
 - write in the URL bar : http://localhost:YOUR_PORT_NUMBER/FILE_REQUESTED
