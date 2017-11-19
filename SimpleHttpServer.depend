@@ -16,7 +16,7 @@
 	<vector>
 	<algorithm>
 
-1511021869 source:/home/paula/Documents/codeblocks_ws/SimpleHTTPServer/main.cpp
+1511082262 source:/home/paula/Documents/codeblocks_ws/SimpleHTTPServer/main.cpp
 	<iostream>
 	<stdio.h>
 	<stdlib.h>
@@ -38,6 +38,11 @@
 	<sys/sendfile.h>
 	<fcntl.h>
 	<time.h>
+	<mutex>
+	<sys/mman.h>
+	<sys/types.h>
+	<sys/wait.h>
+	<unistd.h>
 
 1510927091 source:/home/mark/git/SimpleHTTPServer/main.cpp
 	<iostream>

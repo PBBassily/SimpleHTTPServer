@@ -382,7 +382,7 @@ int establish_conncetion (char* port_number)
                 // select the set
                 int cnt = select(new_fd + 1, &in_set, NULL, NULL, &timeout);
 
-                cout << "cnt: "<<cnt<<endl;
+                //cout << "cnt: "<<cnt<<endl;
                 if (FD_ISSET(new_fd, &in_set))
                 {
                     cout <<"server : connection number : "<<connection_number<<endl;
@@ -431,6 +431,7 @@ int establish_conncetion (char* port_number)
                             if (send(new_fd, reply_header, strlen(reply_header), 0) == -1)
                                 perror("send");
 
+                            usleep(INTER_PACKET_INTERVAL);
                             off_t offset = 0;
                             int remain_data = file_size;
                             size_t sent_bytes = 0;
@@ -523,7 +524,7 @@ int establish_conncetion (char* port_number)
                             mtx.lock();
                             --(*client_num_pointer);
                             mtx.unlock();
-                            cout<<"client num : "<<(*client_num_pointer)<<endl;
+                            cout<<"===>client num : "<<(*client_num_pointer)<<endl;
                         cout<< " client finish his work and close\n";
                     }
                     else
@@ -532,13 +533,17 @@ int establish_conncetion (char* port_number)
                     }
                     connection_number++;
                     usleep(INTER_COMMAND_INTERVAL);
-
+                    cout<<"===>client num : "<<(*client_num_pointer)<<endl;
 
                 }
 
                 else
                 {
                     // nothing received from client in last 5 seconds
+                     mtx.lock();
+                            --(*client_num_pointer);
+                            mtx.unlock();
+                            cout<<"===>client num : "<<(*client_num_pointer)<<endl;
                     cout << "nothing received from client in last 3 seconds\n";
                     break;
                 }
